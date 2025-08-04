@@ -15,6 +15,19 @@ import Button from '../components/UI/Button'
 import LoadingSpinner from '../components/UI/LoadingSpinner'
 import PokemonCard from '../components/UI/PokemonCard'
 
+// Fonction debounce pour éviter le spam d'API
+const debounce = (func, wait) => {
+  let timeout
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout)
+      func(...args)
+    }
+    clearTimeout(timeout)
+    timeout = setTimeout(later, wait)
+  }
+}
+
 const SearchPage = () => {
   const [searchParams, setSearchParams] = useSearchParams()
   const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '')
@@ -61,12 +74,27 @@ const SearchPage = () => {
 
   const loadAvailableFilters = async () => {
     try {
-      const [sets, rarities, types, subtypes] = await Promise.all([
-        pokemonApiService.getSets(),
-        pokemonApiService.getRarities(),
-        pokemonApiService.getTypes(),
-        pokemonApiService.getSubtypes()
-      ])
+      // Chargement séquentiel pour éviter le spam d'API (1 requête à la fois)
+      console.log('📊 Chargement des filtres de manière séquentielle...')
+      
+      const sets = await pokemonApiService.getSets()
+      console.log('✅ Sets chargés')
+      
+      // Délai de 200ms entre chaque requête
+      await new Promise(resolve => setTimeout(resolve, 200))
+      
+      const rarities = await pokemonApiService.getRarities()
+      console.log('✅ Raretés chargées')
+      
+      await new Promise(resolve => setTimeout(resolve, 200))
+      
+      const types = await pokemonApiService.getTypes()
+      console.log('✅ Types chargés')
+      
+      await new Promise(resolve => setTimeout(resolve, 200))
+      
+      const subtypes = await pokemonApiService.getSubtypes()
+      console.log('✅ Sous-types chargés')
 
       setAvailableFilters({
         sets: sets.slice(0, 20), // Limiter à 20 sets les plus récents
@@ -74,6 +102,8 @@ const SearchPage = () => {
         types,
         subtypes
       })
+      
+      console.log('🎯 Tous les filtres chargés avec succès (mode respectueux API)')
     } catch (error) {
       console.error('Erreur lors du chargement des filtres:', error)
     }
@@ -94,30 +124,33 @@ const SearchPage = () => {
     localStorage.setItem('pokemon-recent-searches', JSON.stringify(updated))
   }
 
-  const getSuggestions = useCallback(async (query) => {
-    if (!query || query.length < 2) {
-      setSuggestions([])
-      return
-    }
+  // Debouncing pour éviter le spam d'API
+  const debouncedGetSuggestions = useCallback(
+    debounce(async (query) => {
+      if (!query || query.length < 2) {
+        setSuggestions([])
+        setSuggestionsLoading(false)
+        return
+      }
 
-    try {
-      setSuggestionsLoading(true)
-      
-      // Essayer l'API, fallback vers suggestions locales
-      let suggestions = []
       try {
-        suggestions = await pokemonApiService.getSuggestions(query, 8)
-      } catch (apiError) {
-        // Suggestions de démo basées sur les cartes populaires
-        const popularNames = [
-          'Charizard', 'Pikachu', 'Mewtwo', 'Mew', 'Lugia', 'Ho-Oh',
-          'Rayquaza', 'Dialga', 'Palkia', 'Giratina', 'Arceus',
-          'Reshiram', 'Zekrom', 'Kyurem', 'Xerneas', 'Yveltal'
-        ]
+        setSuggestionsLoading(true)
         
-        suggestions = popularNames
-          .filter(name => name.toLowerCase().includes(query.toLowerCase()))
-          .slice(0, 8)
+        // Essayer l'API, fallback vers suggestions locales
+        let suggestions = []
+        try {
+          suggestions = await pokemonApiService.getSuggestions(query, 8)
+        } catch (apiError) {
+          // Suggestions de démo basées sur les cartes populaires
+          const popularNames = [
+            'Charizard', 'Pikachu', 'Mewtwo', 'Mew', 'Lugia', 'Ho-Oh',
+            'Rayquaza', 'Dialga', 'Palkia', 'Giratina', 'Arceus',
+            'Reshiram', 'Zekrom', 'Kyurem', 'Xerneas', 'Yveltal'
+          ]
+          
+          suggestions = popularNames
+            .filter(name => name.toLowerCase().includes(query.toLowerCase()))
+            .slice(0, 8)
       }
       
       setSuggestions(suggestions)
@@ -127,7 +160,8 @@ const SearchPage = () => {
     } finally {
       setSuggestionsLoading(false)
     }
-  }, [])
+  }, 500), // Délai de 500ms pour éviter le spam
+  [])
 
   const handleSearch = async (query = searchQuery, page = 1) => {
     if (!query.trim() && !Object.values(filters).some(f => f)) {
@@ -202,7 +236,8 @@ const SearchPage = () => {
   const handleInputChange = (value) => {
     setSearchQuery(value)
     setShowSuggestions(true)
-    getSuggestions(value)
+    // Utiliser la fonction debouncée pour éviter le spam d'API
+    debouncedGetSuggestions(value)
   }
 
   const handleSuggestionClick = (suggestion) => {
