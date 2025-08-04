@@ -30,23 +30,10 @@ export default async function handler(req, res) {
   try {
     console.log('🔗 Proxy Vercel vers:', apiUrl.substring(0, 80) + '...');
     
-    // Test de connectivité simple d'abord
-    try {
-      const testResponse = await fetch('https://api.pokemontcg.io/v2/sets?pageSize=1', {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'User-Agent': 'Pokemon Collection Manager/1.0'
-        },
-        signal: AbortSignal.timeout(10000) // 10 secondes max
-      });
-      console.log('✅ Test API PokéTCG:', testResponse.status);
-    } catch (testError) {
-      console.error('❌ Test API PokéTCG échoué:', testError.message);
-      throw new Error(`API PokéTCG indisponible: ${testError.message}`);
-    }
+    // Appel direct à l'API PokéTCG (Edge Runtime compatible)
+    console.log('🔑 API Key disponible:', !!process.env.VITE_POKEMON_API_KEY);
+    console.log('🔗 URL finale:', apiUrl);
     
-    // Appel à l'API PokéTCG avec timeout réduit
     const response = await fetch(apiUrl, {
       method: req.method,
       headers: {
@@ -57,8 +44,7 @@ export default async function handler(req, res) {
         ...(process.env.VITE_POKEMON_API_KEY && {
           'X-Api-Key': process.env.VITE_POKEMON_API_KEY
         })
-      },
-      signal: AbortSignal.timeout(15000) // 15 secondes max
+      }
     });
     
     // Vérifier si la réponse est OK
