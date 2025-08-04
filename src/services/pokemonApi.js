@@ -14,6 +14,10 @@ import {
 const POKEMON_API_BASE = 'https://api.pokemontcg.io/v2'
 const API_KEY = import.meta.env.VITE_POKEMON_API_KEY
 
+// Configuration du proxy CORS externe (solution de contournement)
+const CORS_PROXY_BASE = 'https://api.allorigins.win/get?url='
+const USE_CORS_PROXY = true // Activer le proxy CORS externe
+
 // Détection de l'environnement et plateforme d'hébergement
 const isProduction = import.meta.env.PROD
 const isO2SwitchDomain = window.location.hostname.includes('webexige.fr') || window.location.hostname.includes('o2switch')
@@ -26,6 +30,33 @@ const forceOfflineMode = isProduction && isO2SwitchDomain // Seulement O2switch 
 const simulateApiDelay = (min = 200, max = 800) => {
   const delay = Math.random() * (max - min) + min;
   return new Promise(resolve => setTimeout(resolve, delay));
+}
+
+// Fonction helper pour traiter les réponses du proxy CORS
+const processApiResponse = (response, apiUrl) => {
+  // Si c'est une réponse du proxy CORS externe
+  if (USE_CORS_PROXY && apiUrl.includes('allorigins.win')) {
+    console.log('🔍 Traitement réponse proxy CORS externe')
+    
+    // allorigins.win renvoie { contents: "json_string" }
+    if (response.data && response.data.contents) {
+      try {
+        const parsedData = JSON.parse(response.data.contents)
+        console.log('✅ Données proxy CORS parsées avec succès')
+        return parsedData
+      } catch (parseError) {
+        console.error('❌ Erreur parsing données proxy CORS:', parseError)
+        throw new Error('Erreur de parsing des données du proxy CORS')
+      }
+    } else {
+      console.error('❌ Format de réponse proxy CORS invalide:', response.data)
+      throw new Error('Format de réponse proxy CORS invalide')
+    }
+  } else {
+    // Réponse directe ou proxy interne
+    console.log('✅ Traitement réponse API directe/proxy interne')
+    return response.data
+  }
 }
 
 // Configuration du mode API selon la plateforme
@@ -46,6 +77,15 @@ const getApiMode = () => {
 const getApiUrl = (endpoint) => {
   if (getApiMode() === 'offline') {
     return null // Pas d'URL nécessaire en mode hors ligne
+  }
+  
+  // Priorité au proxy CORS externe si activé
+  if (USE_CORS_PROXY) {
+    const targetUrl = POKEMON_API_BASE + endpoint
+    const proxyUrl = CORS_PROXY_BASE + encodeURIComponent(targetUrl)
+    console.log('🌐 Proxy CORS externe utilisé:', endpoint.substring(0, 30) + '...')
+    console.log('🔗 URL proxy:', proxyUrl.substring(0, 80) + '...')
+    return proxyUrl
   }
   
   if (isVercelDomain) {
@@ -125,14 +165,18 @@ export const pokemonApiService = {
       const response = await axios.get(apiUrl, {
         headers: {
           'Accept': 'application/json',
-          ...(API_KEY && !apiUrl.startsWith('/api/pokemon') && { 'X-Api-Key': API_KEY })
+          // N'envoyer l'API key que si ce n'est pas un proxy
+          ...(API_KEY && !apiUrl.startsWith('/api/pokemon') && !apiUrl.includes('allorigins.win') && { 'X-Api-Key': API_KEY })
         }
       })
       
+      const responseData = processApiResponse(response, apiUrl)
       console.log('✅ API PokéTCG fonctionnelle!')
-      console.log('📊 Sets trouvés:', response.data.data.length)
+      console.log('📊 Sets trouvés:', responseData.data.length)
       
-      if (isVercelDomain) {
+      if (apiUrl.includes('allorigins.win')) {
+        console.log('🌐 Via: Proxy CORS externe (allorigins.win)')
+      } else if (isVercelDomain) {
         console.log('⚡ Via: Proxy Vercel Edge Functions')
       } else if (apiUrl.startsWith('/api/pokemon')) {
         console.log('🐘 Via: Proxy PHP O2switch')
@@ -179,11 +223,13 @@ export const pokemonApiService = {
       const response = await axios.get(apiUrl, {
         headers: {
           'Accept': 'application/json',
-          ...(API_KEY && !apiUrl.startsWith('/api/pokemon') && { 'X-Api-Key': API_KEY })
+          // N'envoyer l'API key que si ce n'est pas un proxy
+          ...(API_KEY && !apiUrl.startsWith('/api/pokemon') && !apiUrl.includes('allorigins.win') && { 'X-Api-Key': API_KEY })
         }
       })
       
-      return response.data.data.sort((a, b) => new Date(b.releaseDate) - new Date(a.releaseDate))
+      const responseData = processApiResponse(response, apiUrl)
+      return responseData.data.sort((a, b) => new Date(b.releaseDate) - new Date(a.releaseDate))
       
     } catch (error) {
       console.error('Erreur lors de la récupération des sets:', error)
@@ -207,11 +253,13 @@ export const pokemonApiService = {
       const response = await axios.get(apiUrl, {
         headers: {
           'Accept': 'application/json',
-          ...(API_KEY && !apiUrl.startsWith('/api/pokemon') && { 'X-Api-Key': API_KEY })
+          // N'envoyer l'API key que si ce n'est pas un proxy
+          ...(API_KEY && !apiUrl.startsWith('/api/pokemon') && !apiUrl.includes('allorigins.win') && { 'X-Api-Key': API_KEY })
         }
       })
       
-      return response.data.data
+      const responseData = processApiResponse(response, apiUrl)
+      return responseData.data
     } catch (error) {
       console.error('Erreur lors de la récupération du set:', error)
       throw error
@@ -237,16 +285,18 @@ export const pokemonApiService = {
       const response = await axios.get(apiUrl, {
         headers: {
           'Accept': 'application/json',
-          ...(API_KEY && !apiUrl.startsWith('/api/pokemon') && { 'X-Api-Key': API_KEY })
+          // N'envoyer l'API key que si ce n'est pas un proxy
+          ...(API_KEY && !apiUrl.startsWith('/api/pokemon') && !apiUrl.includes('allorigins.win') && { 'X-Api-Key': API_KEY })
         }
       })
       
+      const responseData = processApiResponse(response, apiUrl)
       return {
-        cards: response.data.data || [],
-        totalCount: response.data.totalCount || 0,
-        page: response.data.page || page,
-        pageSize: response.data.pageSize || pageSize,
-        totalPages: Math.ceil((response.data.totalCount || 0) / pageSize)
+        cards: responseData.data || [],
+        totalCount: responseData.totalCount || 0,
+        page: responseData.page || page,
+        pageSize: responseData.pageSize || pageSize,
+        totalPages: Math.ceil((responseData.totalCount || 0) / pageSize)
       }
     } catch (error) {
       console.error('Erreur lors de la récupération des cartes:', error)
@@ -314,21 +364,23 @@ export const pokemonApiService = {
       const endpoint = `/cards?${params.toString()}`
       const apiUrl = getApiUrl(endpoint)
       
-      console.log('🔍 Recherche cartes via:', apiUrl.startsWith('/api/pokemon') ? 'Proxy PHP O2switch' : 'Direct')
+      console.log('🔍 Recherche cartes via:', apiUrl.includes('allorigins.win') ? 'Proxy CORS externe' : apiUrl.startsWith('/api/pokemon') ? 'Proxy PHP O2switch' : 'Direct')
 
       const response = await axios.get(apiUrl, {
         headers: {
           'Accept': 'application/json',
-          ...(API_KEY && !apiUrl.startsWith('/api/pokemon') && { 'X-Api-Key': API_KEY })
+          // N'envoyer l'API key que si ce n'est pas un proxy
+          ...(API_KEY && !apiUrl.startsWith('/api/pokemon') && !apiUrl.includes('allorigins.win') && { 'X-Api-Key': API_KEY })
         }
       })
 
+      const responseData = processApiResponse(response, apiUrl)
       return {
-        cards: response.data.data || [],
-        totalCount: response.data.totalCount || 0,
-        page: response.data.page || page,
-        pageSize: response.data.pageSize || pageSize,
-        totalPages: Math.ceil((response.data.totalCount || 0) / pageSize)
+        cards: responseData.data || [],
+        totalCount: responseData.totalCount || 0,
+        page: responseData.page || page,
+        pageSize: responseData.pageSize || pageSize,
+        totalPages: Math.ceil((responseData.totalCount || 0) / pageSize)
       }
       
     } catch (error) {
@@ -444,16 +496,18 @@ export const pokemonApiService = {
       const endpoint = `/cards?${params.toString()}`
       const apiUrl = getApiUrl(endpoint)
       
-      console.log('🔍 Suggestions via:', apiUrl.startsWith('/api/pokemon') ? 'Proxy PHP O2switch' : 'Direct')
+      console.log('🔍 Suggestions via:', apiUrl.includes('allorigins.win') ? 'Proxy CORS externe' : apiUrl.startsWith('/api/pokemon') ? 'Proxy PHP O2switch' : 'Direct')
 
       const response = await axios.get(apiUrl, {
         headers: {
           'Accept': 'application/json',
-          ...(API_KEY && !apiUrl.startsWith('/api/pokemon') && { 'X-Api-Key': API_KEY })
+          // N'envoyer l'API key que si ce n'est pas un proxy
+          ...(API_KEY && !apiUrl.startsWith('/api/pokemon') && !apiUrl.includes('allorigins.win') && { 'X-Api-Key': API_KEY })
         }
       })
       
-      const uniqueNames = [...new Set(response.data.data.map(card => card.name))]
+      const responseData = processApiResponse(response, apiUrl)
+      const uniqueNames = [...new Set(responseData.data.map(card => card.name))]
       return uniqueNames.slice(0, limit)
       
     } catch (error) {
