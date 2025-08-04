@@ -413,8 +413,17 @@ export const pokemonApiService = {
   // Récupérer une carte spécifique
   async getCard(cardId) {
     try {
-      const response = await pokemonApi.get(`/cards/${cardId}`)
-      return response.data.data
+      const apiUrl = getApiUrl(`/cards/${cardId}`)
+      const response = await axios.get(apiUrl, {
+        headers: {
+          'Accept': 'application/json',
+          // N'envoyer l'API key que si ce n'est pas un proxy
+          ...(API_KEY && !apiUrl.startsWith('/api/pokemon') && !apiUrl.includes('allorigins.win') && { 'X-Api-Key': API_KEY })
+        }
+      })
+      
+      const responseData = processApiResponse(response, apiUrl)
+      return responseData.data
     } catch (error) {
       console.error('Erreur lors de la récupération de la carte:', error)
       throw error
@@ -424,14 +433,25 @@ export const pokemonApiService = {
   // Récupérer les cartes populaires/récentes
   async getPopularCards(limit = 20) {
     try {
-      const response = await pokemonApi.get('/cards', {
-        params: {
-          pageSize: limit,
-          orderBy: 'set.releaseDate',
-          q: 'rarity:"Rare Holo" OR rarity:"Rare Holo EX" OR rarity:"Rare Holo GX"'
+      const params = new URLSearchParams({
+        pageSize: limit.toString(),
+        orderBy: 'set.releaseDate',
+        q: 'rarity:"Rare Holo" OR rarity:"Rare Holo EX" OR rarity:"Rare Holo GX"'
+      })
+      
+      const endpoint = `/cards?${params.toString()}`
+      const apiUrl = getApiUrl(endpoint)
+      
+      const response = await axios.get(apiUrl, {
+        headers: {
+          'Accept': 'application/json',
+          // N'envoyer l'API key que si ce n'est pas un proxy
+          ...(API_KEY && !apiUrl.startsWith('/api/pokemon') && !apiUrl.includes('allorigins.win') && { 'X-Api-Key': API_KEY })
         }
       })
-      return response.data.data
+      
+      const responseData = processApiResponse(response, apiUrl)
+      return responseData.data
     } catch (error) {
       console.error('Erreur lors de la récupération des cartes populaires:', error)
       throw error
@@ -441,33 +461,63 @@ export const pokemonApiService = {
   // Récupérer les types de cartes disponibles
   async getTypes() {
     try {
-      const response = await pokemonApi.get('/types')
-      return response.data.data
+      const apiUrl = getApiUrl('/types')
+      const response = await axios.get(apiUrl, {
+        headers: {
+          'Accept': 'application/json',
+          // N'envoyer l'API key que si ce n'est pas un proxy
+          ...(API_KEY && !apiUrl.startsWith('/api/pokemon') && !apiUrl.includes('allorigins.win') && { 'X-Api-Key': API_KEY })
+        }
+      })
+      
+      const responseData = processApiResponse(response, apiUrl)
+      return responseData.data
     } catch (error) {
       console.error('Erreur lors de la récupération des types:', error)
-      throw error
+      // Fallback vers données locales
+      return pokemonTypes
     }
   },
 
   // Récupérer les sous-types disponibles
   async getSubtypes() {
     try {
-      const response = await pokemonApi.get('/subtypes')
-      return response.data.data
+      const apiUrl = getApiUrl('/subtypes')
+      const response = await axios.get(apiUrl, {
+        headers: {
+          'Accept': 'application/json',
+          // N'envoyer l'API key que si ce n'est pas un proxy
+          ...(API_KEY && !apiUrl.startsWith('/api/pokemon') && !apiUrl.includes('allorigins.win') && { 'X-Api-Key': API_KEY })
+        }
+      })
+      
+      const responseData = processApiResponse(response, apiUrl)
+      return responseData.data
     } catch (error) {
       console.error('Erreur lors de la récupération des sous-types:', error)
-      throw error
+      // Fallback vers données locales
+      return ['Basic', 'Stage 1', 'Stage 2', 'EX', 'GX', 'V', 'VMAX']
     }
   },
 
   // Récupérer les raretés disponibles
   async getRarities() {
     try {
-      const response = await pokemonApi.get('/rarities')
-      return response.data.data
+      const apiUrl = getApiUrl('/rarities')
+      const response = await axios.get(apiUrl, {
+        headers: {
+          'Accept': 'application/json',
+          // N'envoyer l'API key que si ce n'est pas un proxy
+          ...(API_KEY && !apiUrl.startsWith('/api/pokemon') && !apiUrl.includes('allorigins.win') && { 'X-Api-Key': API_KEY })
+        }
+      })
+      
+      const responseData = processApiResponse(response, apiUrl)
+      return responseData.data
     } catch (error) {
       console.error('Erreur lors de la récupération des raretés:', error)
-      throw error
+      // Fallback vers données locales
+      return pokemonRarities
     }
   },
 
