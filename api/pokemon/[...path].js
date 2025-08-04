@@ -59,27 +59,47 @@ export default async function handler(req, res) {
     }
     
     console.log('🔄 Début fetch vers PokéTCG API...');
+    console.log('⏱️ Timeout configuré: 60 secondes');
     
-    // Fetch vers l'API PokéTCG
-    const response = await fetch(apiUrl, {
-      method: req.method,
-      headers: headers
-    });
+    // Fetch vers l'API PokéTCG avec timeout optimisé
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 50000); // 50s timeout
     
-    console.log('📡 Réponse reçue, status:', response.status);
-    
-    // Vérifier si la réponse est OK
-    if (!response.ok) {
-      console.error('❌ API error status:', response.status);
-      throw new Error(`API responded with status: ${response.status}`);
-    }
+    try {
+      const response = await fetch(apiUrl, {
+        method: req.method,
+        headers: headers,
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      console.log('⚡ Fetch terminé avec succès');
+      
+      console.log('📡 Réponse reçue, status:', response.status);
+      
+      // Vérifier si la réponse est OK
+      if (!response.ok) {
+        console.error('❌ API error status:', response.status);
+        throw new Error(`API responded with status: ${response.status}`);
+      }
 
-    const data = await response.json();
-    console.log('✅ Données JSON parsées, size:', JSON.stringify(data).length);
-    console.log('✅ Proxy réussi:', data.data?.length || 'N/A', 'éléments');
-    
-    // Retourner les données avec le bon status
-    res.status(response.status).json(data);
+      const data = await response.json();
+      console.log('✅ Données JSON parsées, size:', JSON.stringify(data).length);
+      console.log('✅ Proxy réussi:', data.data?.length || 'N/A', 'éléments');
+      
+      // Retourner les données avec le bon status
+      res.status(response.status).json(data);
+      
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      if (fetchError.name === 'AbortError') {
+        console.error('❌ Timeout de 50s dépassé');
+        throw new Error('Request timeout after 50 seconds');
+      } else {
+        console.error('❌ Erreur fetch:', fetchError.message);
+        throw fetchError;
+      }
+    }
     
   } catch (error) {
     console.error('❌ Erreur Node.js Function:', error);
