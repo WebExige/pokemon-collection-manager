@@ -1,0 +1,127 @@
+// Règles de sécurité Firestore pour Pokémon Collection Manager
+// Ces règles protègent les données utilisateur et autorisent uniquement l'accès aux ressources appropriées
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Règles pour les collections d'utilisateur
+    // Chaque utilisateur ne peut accéder qu'à ses propres cartes
+    match /collections/{document} {
+      allow read, write: if request.auth != null 
+                         && request.auth.uid == resource.data.userId;
+      
+      allow create: if request.auth != null 
+                    && request.auth.uid == request.resource.data.userId
+                    && validateCollectionData();
+      
+      allow update: if request.auth != null 
+                    && request.auth.uid == resource.data.userId
+                    && validateCollectionUpdate();
+      
+      allow delete: if request.auth != null 
+                    && request.auth.uid == resource.data.userId;
+    }
+    
+    // Règles pour les profils utilisateur
+    // Un utilisateur ne peut modifier que son propre profil
+    match /users/{userId} {
+      allow read: if request.auth != null 
+                  && request.auth.uid == userId;
+      
+      allow write: if request.auth != null 
+                   && request.auth.uid == userId
+                   && validateUserProfile();
+      
+      // Permettre la lecture publique si le profil est configuré comme public
+      allow read: if request.auth != null 
+                  && resource.data.preferences.publicCollection == true;
+    }
+    
+    // Règles pour les données publiques partagées (si implémentées)
+    match /public/{document} {
+      allow read: if true; // Lecture publique
+      allow write: if false; // Écriture interdite
+    }
+    
+    // Règles pour les statistiques globales (si implémentées)
+    match /stats/{document} {
+      allow read: if request.auth != null;
+      allow write: if false; // Mise à jour par Cloud Functions uniquement
+    }
+    
+    // Règles pour les sets de cartes en cache (si implémentées)
+    match /sets/{setId} {
+      allow read: if request.auth != null;
+      allow write: if false; // Mise à jour par Cloud Functions uniquement
+    }
+    
+    // Fonctions de validation
+    
+    // Validation des données de collection
+    function validateCollectionData() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['userId', 'cardId', 'status', 'addedDate', 'cardData'])
+             && data.userId is string
+             && data.cardId is string
+             && data.status in ['owned', 'wishlist']
+             && data.addedDate is timestamp
+             && data.cardData is map
+             && data.cardData.keys().hasAll(['name', 'set', 'number', 'rarity', 'images'])
+             && validateOptionalFields(data);
+    }
+    
+    // Validation des mises à jour de collection
+    function validateCollectionUpdate() {
+      let data = request.resource.data;
+      return data.userId == resource.data.userId // Interdire la modification de l'userId
+             && data.cardId == resource.data.cardId // Interdire la modification du cardId
+             && validateOptionalFields(data);
+    }
+    
+    // Validation des champs optionnels
+    function validateOptionalFields(data) {
+      return (!data.keys().hasAny(['notes']) || data.notes is string)
+             && (!data.keys().hasAny(['condition']) || data.condition in ['mint', 'near-mint', 'excellent', 'good', 'light-played', 'played', 'poor'])
+             && (!data.keys().hasAny(['tags']) || data.tags is list);
+    }
+    
+    // Validation du profil utilisateur
+    function validateUserProfile() {
+      let data = request.resource.data;
+      return validateProfileFields(data)
+             && validatePreferences(data.preferences);
+    }
+    
+    // Validation des champs du profil
+    function validateProfileFields(data) {
+      return (!data.keys().hasAny(['displayName']) || data.displayName is string)
+             && (!data.keys().hasAny(['avatar']) || data.avatar is string)
+             && (!data.keys().hasAny(['bio']) || data.bio is string)
+             && (!data.keys().hasAny(['joinDate']) || data.joinDate is timestamp);
+    }
+    
+    // Validation des préférences utilisateur
+    function validatePreferences(preferences) {
+      return preferences is map
+             && (!preferences.keys().hasAny(['theme']) || preferences.theme in ['light', 'dark'])
+             && (!preferences.keys().hasAny(['notifications']) || preferences.notifications is bool)
+             && (!preferences.keys().hasAny(['publicCollection']) || preferences.publicCollection is bool);
+    }
+    
+    // Fonction utilitaire pour vérifier la propriété
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Fonction pour vérifier si l'utilisateur est authentifié
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Fonction pour vérifier la taille des données
+    function isValidSize(data) {
+      return request.resource.size < 1000000; // Limite à 1MB par document
+    }
+  }
+}

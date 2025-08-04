@@ -1,0 +1,154 @@
+# Configuration .htaccess pour hébergement sur O2switch
+# Ce fichier gère le routing SPA, la compression et les optimisations
+
+# Activer la réécriture d'URL
+RewriteEngine On
+
+# ====================
+# PROXY API POKÉTCG (PHP)
+# Contourne les restrictions CORS/CSP
+# Compatible hébergement partagé O2switch
+# ====================
+
+# Proxy PHP pour l'API PokéTCG - AVANT le routing SPA
+RewriteCond %{REQUEST_URI} ^/api/pokemon/(.*)$ [NC]
+RewriteRule ^api/pokemon/(.*)$ /proxy.php?path=$1 [L,QSA]
+
+# Gestion du routing SPA - Rediriger toutes les routes vers index.html
+# Sauf pour les fichiers statiques existants, le proxy API et proxy.php
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME} !-l
+RewriteCond %{REQUEST_URI} !^/api/pokemon
+RewriteCond %{REQUEST_URI} !^/proxy\.php
+RewriteRule ^.*$ /index.html [L,QSA]
+
+# Configuration des headers de sécurité
+<IfModule mod_headers.c>
+    # Forcer HTTPS
+    Header always set Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+    
+    # Protection XSS
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "DENY"
+    Header always set X-XSS-Protection "1; mode=block"
+    
+    # CSP avec support du proxy local PHP
+    Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: https://images.pokemontcg.io; connect-src 'self' https://*.firebaseapp.com https://*.googleapis.com"
+</IfModule>
+
+# Configuration de la compression GZIP
+<IfModule mod_deflate.c>
+    # Compresser les fichiers texte
+    AddOutputFilterByType DEFLATE text/plain
+    AddOutputFilterByType DEFLATE text/html
+    AddOutputFilterByType DEFLATE text/xml
+    AddOutputFilterByType DEFLATE text/css
+    AddOutputFilterByType DEFLATE text/javascript
+    AddOutputFilterByType DEFLATE application/xml
+    AddOutputFilterByType DEFLATE application/xhtml+xml
+    AddOutputFilterByType DEFLATE application/rss+xml
+    AddOutputFilterByType DEFLATE application/javascript
+    AddOutputFilterByType DEFLATE application/x-javascript
+    AddOutputFilterByType DEFLATE application/json
+    
+    # Exclure les fichiers déjà compressés
+    SetEnvIfNoCase Request_URI \
+        \.(?:gif|jpe?g|png|webp|woff2?|ttf|svg|ico|zip|tar|gz|bz2)$ no-gzip dont-vary
+</IfModule>
+
+# Configuration du cache des fichiers statiques
+<IfModule mod_expires.c>
+    ExpiresActive On
+    
+    # Cache des images - 1 mois
+    ExpiresByType image/jpg "access plus 1 month"
+    ExpiresByType image/jpeg "access plus 1 month"
+    ExpiresByType image/gif "access plus 1 month"
+    ExpiresByType image/png "access plus 1 month"
+    ExpiresByType image/webp "access plus 1 month"
+    ExpiresByType image/svg+xml "access plus 1 month"
+    ExpiresByType image/x-icon "access plus 1 month"
+    
+    # Cache des polices - 1 mois
+    ExpiresByType font/woff "access plus 1 month"
+    ExpiresByType font/woff2 "access plus 1 month"
+    ExpiresByType font/ttf "access plus 1 month"
+    ExpiresByType font/otf "access plus 1 month"
+    ExpiresByType application/font-woff "access plus 1 month"
+    ExpiresByType application/font-woff2 "access plus 1 month"
+    
+    # Cache des fichiers CSS et JS - 1 semaine
+    ExpiresByType text/css "access plus 1 week"
+    ExpiresByType text/javascript "access plus 1 week"
+    ExpiresByType application/javascript "access plus 1 week"
+    ExpiresByType application/x-javascript "access plus 1 week"
+    
+    # Cache du HTML - 1 heure
+    ExpiresByType text/html "access plus 1 hour"
+    
+    # Cache des autres fichiers - 1 jour
+    ExpiresDefault "access plus 1 day"
+</IfModule>
+
+# Configuration des en-têtes Cache-Control
+<IfModule mod_headers.c>
+    # Cache des assets avec hash - 1 an (fichiers avec nom unique)
+    <FilesMatch "\.(js|css)$">
+        Header set Cache-Control "max-age=31536000, public, immutable"
+    </FilesMatch>
+    
+    # Cache des images - 1 mois
+    <FilesMatch "\.(jpg|jpeg|png|gif|webp|svg|ico)$">
+        Header set Cache-Control "max-age=2592000, public"
+    </FilesMatch>
+    
+    # Cache des polices - 1 mois
+    <FilesMatch "\.(woff|woff2|ttf|otf)$">
+        Header set Cache-Control "max-age=2592000, public"
+    </FilesMatch>
+    
+    # Pas de cache pour le HTML principal
+    <FilesMatch "\.html$">
+        Header set Cache-Control "max-age=3600, public"
+    </FilesMatch>
+</IfModule>
+
+# Configuration du type MIME pour les fichiers modernes
+<IfModule mod_mime.c>
+    AddType application/javascript .js
+    AddType text/css .css
+    AddType image/webp .webp
+    AddType font/woff .woff
+    AddType font/woff2 .woff2
+    AddType application/manifest+json .webmanifest
+</IfModule>
+
+# Bloquer l'accès aux fichiers sensibles
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+
+<FilesMatch "\.(env|log|htaccess|htpasswd|ini|conf)$">
+    Require all denied
+</FilesMatch>
+
+# Redirection automatique vers HTTPS (optionnel)
+# Décommentez les lignes suivantes si vous souhaitez forcer HTTPS
+# RewriteCond %{HTTPS} off
+# RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# Configuration pour les erreurs personnalisées
+ErrorDocument 404 /index.html
+ErrorDocument 403 /index.html
+
+# Désactiver l'indexation des répertoires
+Options -Indexes
+
+# Optimisation de la bande passante
+<IfModule mod_deflate.c>
+    # Configuration avancée de la compression
+    SetOutputFilter DEFLATE
+    SetEnvIfNoCase Request_URI \.(?:gif|jpe?g|png|webp)$ no-gzip dont-vary
+    SetEnvIfNoCase Request_URI \.(?:exe|t?gz|zip|bz2|sit|rar)$ no-gzip dont-vary
+</IfModule>
