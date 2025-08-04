@@ -3,6 +3,7 @@
   "name": "poke-col-awouki",
   "functions": {
     "api/pokemon/[...path].js": {
+      "runtime": "nodejs18.x",
       "maxDuration": 30
     }
   },

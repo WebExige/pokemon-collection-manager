@@ -16,7 +16,7 @@ const API_KEY = import.meta.env.VITE_POKEMON_API_KEY
 
 // Configuration du proxy CORS externe (solution de contournement)
 const CORS_PROXY_BASE = 'https://api.allorigins.win/get?url='
-const USE_CORS_PROXY = true // Activer le proxy CORS externe
+const USE_CORS_PROXY = false // Désactiver le proxy CORS externe (utiliser Vercel Functions)
 
 // Détection de l'environnement et plateforme d'hébergement
 const isProduction = import.meta.env.PROD
@@ -65,7 +65,7 @@ const getApiMode = () => {
     console.log('🔌 Mode hors ligne forcé (O2switch) - Données locales utilisées')
     return 'offline'
   } else if (isVercelDomain) {
-    console.log('⚡ Mode Vercel - API via proxy Edge Functions')
+    console.log('⚡ Mode Vercel - API via proxy Node.js Functions')
     return 'online'
   } else {
     console.log('📡 Mode API en ligne - Tentative de connexion directe')
@@ -89,7 +89,7 @@ const getApiUrl = (endpoint) => {
   }
   
   if (isVercelDomain) {
-    // Vercel : utiliser le proxy Edge Functions
+    // Vercel : utiliser le proxy Node.js Functions
     console.log('⚡ Proxy Vercel utilisé:', endpoint.substring(0, 30) + '...')
     return `/api/pokemon${endpoint}`
   } else if (isProduction && isO2SwitchDomain) {
@@ -177,7 +177,7 @@ export const pokemonApiService = {
       if (apiUrl.includes('allorigins.win')) {
         console.log('🌐 Via: Proxy CORS externe (allorigins.win)')
       } else if (isVercelDomain) {
-        console.log('⚡ Via: Proxy Vercel Edge Functions')
+        console.log('⚡ Via: Proxy Vercel Node.js Functions')
       } else if (apiUrl.startsWith('/api/pokemon')) {
         console.log('🐘 Via: Proxy PHP O2switch')
       } else {
@@ -364,7 +364,7 @@ export const pokemonApiService = {
       const endpoint = `/cards?${params.toString()}`
       const apiUrl = getApiUrl(endpoint)
       
-      console.log('🔍 Recherche cartes via:', apiUrl.includes('allorigins.win') ? 'Proxy CORS externe' : apiUrl.startsWith('/api/pokemon') ? 'Proxy PHP O2switch' : 'Direct')
+      console.log('🔍 Recherche cartes via:', apiUrl.includes('allorigins.win') ? 'Proxy CORS externe' : (isVercelDomain && apiUrl.startsWith('/api/pokemon')) ? 'Proxy Vercel Node.js' : apiUrl.startsWith('/api/pokemon') ? 'Proxy PHP O2switch' : 'Direct')
 
       const response = await axios.get(apiUrl, {
         headers: {
@@ -496,7 +496,7 @@ export const pokemonApiService = {
       const endpoint = `/cards?${params.toString()}`
       const apiUrl = getApiUrl(endpoint)
       
-      console.log('🔍 Suggestions via:', apiUrl.includes('allorigins.win') ? 'Proxy CORS externe' : apiUrl.startsWith('/api/pokemon') ? 'Proxy PHP O2switch' : 'Direct')
+      console.log('🔍 Suggestions via:', apiUrl.includes('allorigins.win') ? 'Proxy CORS externe' : (isVercelDomain && apiUrl.startsWith('/api/pokemon')) ? 'Proxy Vercel Node.js' : apiUrl.startsWith('/api/pokemon') ? 'Proxy PHP O2switch' : 'Direct')
 
       const response = await axios.get(apiUrl, {
         headers: {
