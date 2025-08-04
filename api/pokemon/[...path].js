@@ -31,20 +31,29 @@ export default async function handler(req, res) {
     console.log('🔗 Proxy Vercel vers:', apiUrl.substring(0, 80) + '...');
     
     // Appel direct à l'API PokéTCG (Edge Runtime compatible)
-    console.log('🔑 API Key disponible:', !!process.env.VITE_POKEMON_API_KEY);
+    const apiKey = process.env.VITE_POKEMON_API_KEY;
+    console.log('🔑 API Key disponible:', !!apiKey);
+    console.log('🔑 API Key preview:', apiKey ? `${apiKey.substring(0, 8)}...` : 'AUCUNE');
     console.log('🔗 URL finale:', apiUrl);
+    
+    // Headers optimisés selon la documentation PokéTCG
+    const headers = {
+      'Accept': 'application/json',
+      'User-Agent': 'Pokemon Collection Manager/1.0',
+      'Content-Type': 'application/json'
+    };
+    
+    // Ajouter la clé API OBLIGATOIRE selon la doc
+    if (apiKey) {
+      headers['X-Api-Key'] = apiKey;
+      console.log('🔑 Header X-Api-Key ajouté');
+    } else {
+      console.log('⚠️ ATTENTION: Pas de clé API = rate limit 30/min seulement!');
+    }
     
     const response = await fetch(apiUrl, {
       method: req.method,
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'User-Agent': 'Pokemon Collection Manager/1.0',
-        // Ajouter la clé API si disponible
-        ...(process.env.VITE_POKEMON_API_KEY && {
-          'X-Api-Key': process.env.VITE_POKEMON_API_KEY
-        })
-      }
+      headers: headers
     });
     
     // Vérifier si la réponse est OK
